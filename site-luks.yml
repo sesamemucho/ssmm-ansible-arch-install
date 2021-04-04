@@ -17,14 +17,14 @@
           command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
           tags:
             - wipefs
-        - name: Create boot partition
+        - name: Create EFI partition
           parted:
             device: '{{ install_drive }}'
             label: gpt
             number: 1
             part_end: 512MB
             name: boot
-            flags: [boot, esp]
+            flags: [esp]
             state: present
         - name: Create root partition
           parted:
@@ -57,6 +57,10 @@
           loop:
             - {lv: tmp, size: 512m}
             - {lv: root, size: "100%FREE"}
+        - name: Get UUID for root volume
+          command: blkid -s UUID -o value /dev/VolumeGroup00/root
+          register: root_luks_uuid
+          changed_when: false
       tags:
         - lvm
     - name: Setup LUKS encryption for root filesystem
@@ -114,11 +118,11 @@
             state: mounted
         - name: Create mountpoint for boot volume
           file:
-            path: /mnt/boot
+            path: /mnt/boot/efi
             state: directory
         - name: Mount boot filesystem
           mount:
-            path: /mnt/boot
+            path: /mnt/boot/efi
             src: UUID={{ boot_uuid.stdout }}
             fstype: vfat
             state: mounted
@@ -126,13 +130,13 @@
         - mount_filesystems
     - name: Rank Arch mirrors
       block:
-        - name: Install the pacman-contrib package (for rankmirrors)
+        - name: Install the reflector package (for rankmirrors)
           pacman:
             name:
-              - pacman-contrib
+              - reflector
             update_cache: yes
-        - name: Use rankmirrors to filter the fastest mirrors that support HTTPS
-          shell: curl -s "https://www.archlinux.org/mirrorlist/?country=US&protocol=https&use_mirror_status=on" | sed -e 's/^#Server/Server/' -e '/^#/d' | rankmirrors -n 5 - > /etc/pacman.d/mirrorlist
+        - name: filter the fastest mirrors that support HTTPS
+          shell: reflector --verbose --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
       tags:
         - mirrors
     - name: Run pacstrap
@@ -155,7 +159,7 @@
         - name: Add boot volume to fstab
           mount:
             fstab: /mnt/etc/fstab
-            path: /boot
+            path: /boot/efi
             src: UUID={{ boot_uuid.stdout }}
             fstype: vfat
             opts: defaults
@@ -182,7 +186,7 @@
       tags:
         - crypttab
     - name: Set local timezone
-      command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime
+      command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
       tags:
         - timezone
     - name: Generate adjtime file
@@ -240,7 +244,8 @@
           lineinfile:
             dest: /mnt/etc/mkinitcpio.conf
             regexp: ^HOOKS=
-            line: HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)
+#            line: HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)
+            line: HOOKS=(base udev autodetect keyboard keymap modconf block lvm2 filesystems fsck)
         - name: Create new initramfs
           command: arch-chroot /mnt mkinitcpio -p linux
       tags:
@@ -254,7 +259,7 @@
             regexp: ^GRUB_CMDLINE_LINUX=
             line: GRUB_CMDLINE_LINUX="cryptdevice=UUID={{ root_luks_uuid.stdout }}:root root=/dev/mapper/root"
         - name: Install grub
-          command: arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+          command: arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
         - name: Create grub config
           command: arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
       tags:
