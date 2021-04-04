@@ -118,11 +118,11 @@
             state: mounted
         - name: Create mountpoint for boot volume
           file:
-            path: /mnt/boot/efi
+            path: /mnt/boot
             state: directory
         - name: Mount boot filesystem
           mount:
-            path: /mnt/boot/efi
+            path: /mnt/boot
             src: '{{ install_drive }}{{ boot_partition_suffix }}'
             fstype: vfat
             state: mounted
@@ -159,7 +159,7 @@
         - name: Add boot volume to fstab
           mount:
             fstab: /mnt/etc/fstab
-            path: /boot/efi
+            path: /boot
             src: '{{ install_drive }}{{ boot_partition_suffix }}'
             fstype: vfat
             opts: defaults
@@ -169,7 +169,7 @@
           mount:
             fstab: /mnt/etc/fstab
             path: /tmp
-            src: /dev/mapper/tmp
+            src: /dev/mapper/VolumeGroup00-tmp
             fstype: tmpfs
             opts: defaults
             state: present
@@ -251,20 +251,45 @@
       tags:
         - initramfs
         - mkinitcpio
-    - name: Set up grub
+
+    - name: Set up systemd-boot
       block:
-        - name: Add commandline information to grub config
-          lineinfile:
-            dest: /mnt/etc/default/grub
-            regexp: ^GRUB_CMDLINE_LINUX=
-            line: GRUB_CMDLINE_LINUX="root=/dev/mapper/VolumeGroup00-root"
-#            line: GRUB_CMDLINE_LINUX="cryptdevice=UUID={{ root_luks_uuid.stdout }}:root root=/dev/mapper/root"
-        - name: Install grub
-          command: arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
-        - name: Create grub config
-          command: arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+
+        - name: Create directory for EFI configuration files
+          file:
+            path: /mnt/boot/loader/entries
+            state: directory
+        # - name: Set up EFI
+        #   command: arch-chroot /mnt bootctl --path=/boot install
+
+        - name: Add commandline information to EFI config
+          ansible.builtin.template:
+            src: files/arch.conf.j2
+            dest: /mnt/boot/loader/entries/arch.conf
+            owner: root
+            group: root
+            mode: 0644
+
+        - name: Add loader config
+          ansible.builtin.template:
+            src: files/loader.conf.j2
+            dest: /mnt/boot/loader/loader.conf
+            owner: root
+            group: root
+            mode: 0644
+      vars:
+        root_dev: /dev/mapper/VolumeGroup00-root
+
       tags:
-        - grub
+        - bootctl_cfg
+
+    - name: Initialize systemd-boot
+      block:
+        - name: Update systemd-boot
+          command: arch-chroot /mnt bootctl --path=/boot install
+      tags:
+        - bootctl
+
     - name: Setup user account
       block:
         - name: Create user account
