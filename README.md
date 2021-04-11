@@ -28,3 +28,6 @@ At this point your new Arch Linux system is ready to be configured.
 The project
 [jsf9k/ansible-home](https://github.com/jsf9k/ansible-home) can be
 used for this purpose.
+
+site-luks.yml builds an EFI system with LUKS, but no LVM.
+site-plain.yml builds an EFI system without LUKS or LVM.

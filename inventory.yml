@@ -4,3 +4,7 @@ all:
     home:
       hosts:
         michiba:
+
+    vm:
+      hosts:
+        trenco:
