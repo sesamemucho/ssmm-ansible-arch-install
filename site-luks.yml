@@ -1,5 +1,5 @@
 ---
-- hosts: all
+- hosts: michiba
   tasks:
     - name: Abort if the host is not booted from the Arch install media
       fail:
@@ -33,7 +33,7 @@
             number: 2
             part_start: 512MB
             name: root
-            flags: [lvm]
+            # flags: [lvm]
             state: present
       tags:
         - repartition
@@ -144,7 +144,7 @@
       tags:
         - mirrors
     - name: Run pacstrap
-      command: pacstrap /mnt base dhclient dhcpcd efibootmgr grub linux linux-firmware lvm2 netctl openssh python sudo
+      command: pacstrap /mnt base dhclient dhcpcd efibootmgr grub linux linux-firmware NetworkManager openssh python sudo ansible git sshpass rsync wpa_supplicant
       tags:
         - pacstrap
     - name: Generate fstab

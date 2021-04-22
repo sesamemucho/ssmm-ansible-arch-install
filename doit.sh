@@ -1,3 +1,3 @@
 #!/bin/bash
 set -x
-ansible-playbook -i inventory.yml --skip-tags bootctl,reboot site-luks.yml
+ansible-playbook -i inventory.yml -i michiba, "$@" --skip-tags bootctl,reboot site-luks.yml
