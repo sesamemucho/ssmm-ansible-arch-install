@@ -3,8 +3,9 @@ all:
   children:
     home:
       hosts:
-        michiba:
+        # michiba:
+        sakai:
 
-    vm:
-      hosts:
-        trenco:
+    # vm:
+    #   hosts:
+    #     trenco:

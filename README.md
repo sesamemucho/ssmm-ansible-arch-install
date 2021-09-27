@@ -5,6 +5,8 @@ An Ansible playbook to help install Arch Linux.
 ## Usage ##
 
 After booting from the Arch installation media, you will need to:
+0. Set up a network connection with something like
+   iwctl -P passphrase station wlan0 connect "SSID".
 1. Set the root password using the `passwd` command.
 2. Use `vim` to edit the file `/etc/ssh/sshd_config` by changing the
    `ChallengeResponseAuthentication` setting to `yes`.

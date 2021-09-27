@@ -22,20 +22,29 @@
           command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
           tags:
             - wipefs
-        - name: Create EFI partition
+        - name: Create BIOS Boot partition
           parted:
             device: '{{ install_drive }}'
             label: gpt
             number: 1
+            part_end: 1MB
+            name: bios
+            flags: [bios_grub]
+            state: present
+        - name: Create Boot partition
+          parted:
+            device: '{{ install_drive }}'
+            #label: gpt
+            number: 2
             part_end: 512MB
             name: boot
-            flags: [esp]
+            #flags: [bios_grub]
             state: present
         - name: Create root partition
           parted:
             device: '{{ install_drive }}'
-            label: gpt
-            number: 2
+            #label: gpt
+            number: 3
             part_start: 512MB
             name: root
             # flags: [lvm]
@@ -115,10 +124,10 @@
         #   command: blkid -s UUID -o value '{{ install_drive }}{{ boot_partition_suffix }}'
         #   register: boot_uuid
         #   changed_when: false
-        # - name: Get UUID for root filesystem
-        #   command: blkid -s UUID -o value /dev/mapper/VolumeGroup00-root
-        #   register: root_uuid
-        #   changed_when: false
+        - name: Get UUID for root filesystem
+          command: blkid -s UUID -o value /dev/mapper/root
+          register: root_uuid
+          changed_when: false
       tags:
         - create_filesystems
     - name: Mount filesystems
@@ -155,7 +164,7 @@
         - mirrors
 
     - name: Run pacstrap
-      command: pacstrap /mnt base btrfs-progs dhclient dhcpcd efibootmgr grub linux linux-firmware netctl openssh python sudo ansible git sshpass rsync vim wpa_supplicant
+      command: pacstrap /mnt base btrfs-progs dhclient dhcpcd syslinux gptfdisk grub linux linux-firmware netctl openssh python sudo ansible git sshpass rsync vim wpa_supplicant
       tags:
         - pacstrap
 
@@ -281,50 +290,34 @@
           lineinfile:
             dest: /mnt/etc/mkinitcpio.conf
             regexp: ^HOOKS=
-            line: HOOKS=(base udev systemd keyboard keymap sd-vconsole block sd-encrypt autodetect modconf filesystems fsck)
-        - name: Create new initramfs
-          command: arch-chroot /mnt mkinitcpio -p linux
+            line: HOOKS=(base systemd modconf block keyboard sd-vconsole autodetect sd-encrypt filesystems fsck)
+          notify:
+            - Update mkinitcpio
       tags:
         - initramfs
         - mkinitcpio
 
-    - name: Set up systemd-boot
-      block:
-
-        - name: Create directory for EFI configuration files
-          file:
-            path: /mnt/boot/loader/entries
-            state: directory
-        # - name: Set up EFI
-        #   command: arch-chroot /mnt bootctl --path=/boot install
-
-        - name: Add commandline information to EFI config
-          ansible.builtin.template:
-            src: files/arch-luks.conf.j2
-            dest: /mnt/boot/loader/entries/arch.conf
-            owner: root
-            group: root
-            mode: 0644
-
-        - name: Add loader config
-          ansible.builtin.template:
-            src: files/loader.conf.j2
-            dest: /mnt/boot/loader/loader.conf
-            owner: root
-            group: root
-            mode: 0644
-      vars:
-        root_dev: /dev/mapper/root
-
+    - name: Setup grub boot
+      lineinfile:
+        path: /mnt/etc/default/grub
+        regexp: ^#GRUB_ENABLE_CRYPTODISK=
+        line: GRUB_ENABLE_CRYPTODISK=y
+      notify:
+        - Reinstall grub
+        - Update grub configuration
       tags:
-        - bootctl_cfg
+        - install_bootloader
 
-    - name: Initialize systemd-boot
-      block:
-        - name: Update systemd-boot
-          command: arch-chroot /mnt bootctl --path=/boot install
+    - name: Setup grub boot
+      lineinfile:
+        path: /mnt/etc/default/grub
+        regexp: ^GRUB_CMDLINE_LINUX_DEFAULT=
+        line: GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet rd.luks.name={{ root_luks_uuid.stdout }}=cryptdev"
+      notify:
+        - Reinstall grub
+        - Update grub configuration
       tags:
-        - bootctl
+        - install_bootloader
 
     - name: Setup user account
       block:
@@ -357,10 +350,27 @@
         validate: /usr/sbin/visudo --check --file=%s
       tags:
         - sudo
-    - name: Reboot
-      reboot:
-        connect_timeout: 1
-        reboot_timeout: 1
-      failed_when: false
+    # - name: Reboot
+    #   reboot:
+    #     connect_timeout: 1
+    #     reboot_timeout: 1
+    #   failed_when: false
+    #   tags:
+    #     - reboot
+
+  handlers:
+    - name: Update mkinitcpio
+      ansible.builtin.command: arch-chroot /mnt mkinitcpio -p linux
       tags:
-        - reboot
+        - initramfs
+        - mkinitcpio
+
+    - name: Reinstall grub
+      ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-install --target i386-pc --recheck "{{ install_drive }}"
+      tags:
+        - install_bootloader
+
+    - name: Update grub configuration
+      ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg
+      tags:
+        - install_bootloader
