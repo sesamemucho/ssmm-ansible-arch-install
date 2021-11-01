@@ -1,0 +1,6 @@
+---
+ansible_host: 192.168.121.190
+boottype: bios
+install_drive: /dev/vda
+wired_interface: enp1s0
+root_partition_suffix: '2'

@@ -1,0 +1,28 @@
+---
+- hosts: all
+  remote_user: root
+
+  vars:
+    ansible_become_pass: rootpass
+
+  tasks:
+    - name: Abort if the host is not booted from the Arch install media
+      fail:
+        msg: "This host is not booted from the Arch install media!"
+      when: ansible_nodename != 'archiso'
+      tags:
+        - quick_exit
+    - name: Synchronize clock via NTP
+      command: timedatectl set-ntp true
+      tags:
+        - sync_clock
+    - name: Repartition install drive
+      block:
+        - name: Wipe install drive and all its partitions
+          command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
+          tags:
+            - wipefs
+
+        - name: Create partitions
+          ansible.builtin.import_role:
+            name: create_partitions

@@ -4,6 +4,7 @@
 
   vars:
     ansible_become_pass: rootpass
+    part_num: 1
 
   tasks:
     - name: Abort if the host is not booted from the Arch install media
@@ -16,41 +17,45 @@
       command: timedatectl set-ntp true
       tags:
         - sync_clock
-    - name: Repartition install drive
-      block:
-        - name: Wipe install drive and all its partitions
-          command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
-          tags:
-            - wipefs
-        - name: Create BIOS Boot partition
-          parted:
-            device: '{{ install_drive }}'
-            label: gpt
-            number: 1
-            part_end: 1MB
-            name: bios
-            flags: [bios_grub]
-            state: present
-        - name: Create Boot partition
-          parted:
-            device: '{{ install_drive }}'
-            #label: gpt
-            number: 2
-            part_end: 512MB
-            name: boot
-            #flags: [bios_grub]
-            state: present
-        - name: Create root partition
-          parted:
-            device: '{{ install_drive }}'
-            #label: gpt
-            number: 3
-            part_start: 512MB
-            name: root
-            # flags: [lvm]
-            state: present
-      tags:
-        - repartition
+    - name: Initialize drive
+      import_tasks: tasks/partition.yml
+    # - name: Repartition install drive
+    #   block:
+    #     - name: Wipe install drive and all its partitions
+    #       command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
+    #       tags:
+    #         - wipefs
+
+    #     - name: Create BIOS Boot partition
+    #       parted:
+    #         device: '{{ install_drive }}'
+    #         label: gpt
+    #         number: 1
+    #         part_end: 1MB
+    #         name: bios
+    #         flags: [bios_grub]
+    #         state: present
+    #     - name: Create Boot partition
+    #       parted:
+    #         device: '{{ install_drive }}'
+    #         label: gpt
+    #         number: 2
+    #         part_start: 1MB
+    #         part_end: 512MB
+    #         name: boot
+    #         #flags: [bios_grub]
+    #         state: present
+    #     - name: Create root partition
+    #       parted:
+    #         device: '{{ install_drive }}'
+    #         label: gpt
+    #         number: 3
+    #         part_start: 512MB
+    #         name: root
+    #         # flags: [lvm]
+    #         state: present
+    #   tags:
+    #     - repartition
     # - name: Setup LVM root and tmp volumes
     #   block:
     #     - name: Remove existing volume group
@@ -332,10 +337,10 @@
           loop:
             - chmod 0700 /home/{{ user_name }}/.ssh
             - chown {{ user_name }}:{{ user_name }} /home/{{ user_name }}/.ssh
-        - name: Copy over ssh key from current Ansible controller as an authorized key
+        - name: Copy over ssh keys from current Ansible controller as an authorized key
           copy:
-            src: '{{ lookup("env", "HOME") }}/.ssh/id_ed25519.pub'
-            dest: /mnt/home/{{ user_name }}/.ssh/authorized_keys
+            src: '{{ lookup("env", "HOME") }}/.ssh/'
+            dest: '/mnt/home/{{ user_name }}/.ssh/'
         - name: Set mode, owner, and group on user's authorized_key file
           command: arch-chroot /mnt {{ item }}
           loop:

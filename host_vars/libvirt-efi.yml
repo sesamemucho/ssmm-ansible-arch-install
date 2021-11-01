@@ -1,0 +1,5 @@
+---
+ansible_host: 192.168.122.82
+boottype: efi
+install_drive: /dev/vda
+wired_interface: enp1s0

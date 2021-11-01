@@ -1,0 +1,121 @@
+---
+# - name: Initialize partition number
+#   set_fact:
+#     part_num: 1
+
+- name: Wipe install drive and all its partitions
+  ansible.builtin.command:
+    cmd: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
+  tags:
+    - wipefs
+
+- name: Create EFI partition
+  parted:
+    device: '{{ install_drive }}'
+    label: gpt
+    number: "{{ part_num }}"
+    part_end: 512MB
+    name: boot
+    flags: [esp]
+    state: present
+  when: boottype == "efi"
+  tags:
+    - repartition
+
+- name: inc part_num_efi1
+  set_fact:
+    part_num: "{{ part_num | int + 1 }}"
+  when: boottype == "efi"
+  tags:
+    - repartition
+
+# BIOS setup
+- name: Create BIOS Boot partition
+  parted:
+    device: '{{ install_drive }}'
+    label: gpt
+    number: "{{ item.num }}"
+    #number: 1
+    part_start: "{{ item.start }}"
+    part_end: "{{ item.end }}"
+    name: "{{ item.name }}"
+    # Can't use flags: here because
+    #   The first partition is the only one that can validly have a flag
+    #   If the flag: keyword is present, parted will try to set that flag
+    #    even if the flag is blank, which will cause a syntax error in the parted
+    #    commmand.
+    state: present
+  when: boottype == "bios"
+  loop:
+    - { num: 1, start: "0%", end: "1MB", name: "bios" }
+    - { num: 2, start: "1MB", end: "513MB", name: "boot" }
+    - { num: 3, start: "513MB", end: "100%", name: "root" }
+  tags:
+    - repartition
+
+- name: Create BIOS Boot partition flag
+  parted:
+    device: '{{ install_drive }}'
+    label: gpt
+    number: 1
+    flags: [bios_grub]
+    state: present
+  when: boottype == "bios"
+  tags:
+    - repartition
+
+# - name: Create BIOS Boot partition
+#   parted:
+#     device: '{{ install_drive }}'
+#     label: gpt
+#     number: "{{ part_num }}"
+#     #number: 1
+#     part_end: 1MB
+#     name: bios
+#     flags: [bios_grub]
+#     state: present
+#   when: boottype == "bios"
+#   tags:
+#     - repartition
+
+# - name: inc part_num_bios1
+#   set_fact:
+#     part_num: "{{ part_num | int + 1 }}"
+#   when: boottype == "bios"
+#   tags:
+#     - repartition
+
+# - name: Create Boot partition
+#   parted:
+#     device: '{{ install_drive }}'
+#     label: gpt
+#     number: 2
+#     #number: "{{ part_num }}"
+#     part_start: 1MB
+#     part_end: 512MB
+#     name: boot
+#     #flags: [bios_grub]
+#     state: present
+#   when: boottype == "bios"
+#   tags:
+#     - repartition
+
+# - name: inc part_num_bios2
+#   set_fact:
+#     part_num: "{{ part_num | int + 1 }}"
+#   when: boottype == "bios"
+#   tags:
+#     - repartition
+
+# - name: Create root partition
+#   parted:
+#     device: '{{ install_drive }}'
+#     label: gpt
+#     number: "{{ part_num }}"
+#     # number: 3
+#     part_start: 512MB
+#     name: root
+#     # flags: [lvm]
+#     state: present
+#   tags:
+#     - repartition

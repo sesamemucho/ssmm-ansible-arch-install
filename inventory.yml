@@ -3,9 +3,29 @@ all:
   children:
     home:
       hosts:
-        # michiba:
+        local-foo:
+        michiba:
+        local-boo:
         sakai:
+        kaga:
+        libvirt-bios:
+        libvirt-efi:
 
-    # vm:
-    #   hosts:
-    #     trenco:
+# home:
+#   children:
+#     bios:
+#       hosts:
+#         local-boo:
+#         sakai:
+#         kaga:
+
+#     efi:
+#       hosts:
+#         local-foo:
+#         michiba:
+#         vagrant:
+
+# all:
+#   children:
+#     efi:
+#     bios:
