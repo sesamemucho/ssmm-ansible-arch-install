@@ -4,15 +4,11 @@
 
   vars:
     ansible_become_pass: rootpass
-    part_num: 1
+    pacstrap_extras:
+      bios: 'gptfdisk syslinux'
+      efi:  'efibootmgr'
 
   tasks:
-    - name: wut4
-      ansible.builtin.debug:
-        var: root_partition_suffix
-      tags:
-        - debug
-
     - name: Abort if the host is not booted from the Arch install media
       fail:
         msg: "This host is not booted from the Arch install media!"
@@ -25,69 +21,6 @@
         - sync_clock
     - name: Initialize drive
       import_tasks: tasks/partition.yml
-    # - name: Repartition install drive
-    #   block:
-    #     - name: Wipe install drive and all its partitions
-    #       command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
-    #       tags:
-    #         - wipefs
-
-    #     - name: Create BIOS Boot partition
-    #       parted:
-    #         device: '{{ install_drive }}'
-    #         label: gpt
-    #         number: 1
-    #         part_end: 1MB
-    #         name: bios
-    #         flags: [bios_grub]
-    #         state: present
-    #     - name: Create Boot partition
-    #       parted:
-    #         device: '{{ install_drive }}'
-    #         label: gpt
-    #         number: 2
-    #         part_start: 1MB
-    #         part_end: 512MB
-    #         name: boot
-    #         #flags: [bios_grub]
-    #         state: present
-    #     - name: Create root partition
-    #       parted:
-    #         device: '{{ install_drive }}'
-    #         label: gpt
-    #         number: 3
-    #         part_start: 512MB
-    #         name: root
-    #         # flags: [lvm]
-    #         state: present
-    #   tags:
-    #     - repartition
-    # - name: Setup LVM root and tmp volumes
-    #   block:
-    #     - name: Remove existing volume group
-    #       lvg:
-    #         vg: VolumeGroup00
-    #         force: yes
-    #         state: absent
-    #     - name: Configure volume group
-    #       lvg:
-    #         vg: VolumeGroup00
-    #         pvs:
-    #           - '{{ install_drive }}{{ root_partition_suffix }}'
-    #     - name: Configure logical volumes
-    #       lvol:
-    #         vg: VolumeGroup00
-    #         lv: '{{ item.lv }}'
-    #         size: '{{ item.size }}'
-    #       loop:
-    #         - {lv: tmp, size: 512m}
-    #         - {lv: root, size: "100%FREE"}
-    #     # - name: Get UUID for root volume
-    #     #   command: blkid -s UUID -o value /dev/mapper/VolumeGroup00-root
-    #     #   register: root_luks_uuid
-    #     #   changed_when: false
-    #   tags:
-    #     - lvm
     - name: Setup LUKS encryption key
       block:
         - name: Copy keyfile
@@ -161,6 +94,7 @@
             state: mounted
       tags:
         - mount_filesystems
+
     - name: Rank Arch mirrors
       block:
         - name: Install the reflector package (for rankmirrors)
@@ -169,28 +103,14 @@
               - reflector
             update_cache: yes
         - name: filter the fastest mirrors that support HTTPS
-#          shell: reflector --verbose --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
           shell: reflector --verbose --latest 10 --sort rate | awk -e '! /rsync/ {print}' > /etc/pacman.d/mirrorlist
       tags:
         - mirrors
 
     - name: Run pacstrap
-      command: pacstrap /mnt base btrfs-progs dhclient dhcpcd syslinux gptfdisk grub linux linux-firmware netctl openssh python sudo ansible git sshpass rsync vim wpa_supplicant
+      command: pacstrap /mnt base ansible btrfs-progs dhclient dhcpcd git grub linux linux-firmware netctl openssh python rsync sshpass sudo vim wpa_supplicant {{ pacstrap_extras[boottype] }}
       tags:
         - pacstrap
-
-    # - name: Run pacstrap
-    #   command: pacstrap /mnt base networkmanager
-    #   tags:
-    #     - pacstrap1
-
-    # - name: Enable services
-    #   ansible.builtin.systemd:
-    #     name: NetworkManager
-    #     enabled: yes
-    #     state: stopped
-    #   tags:
-    #     - pacstrap2
 
     - name: Generate fstab
       block:
@@ -214,26 +134,9 @@
             opts: defaults
             passno: '2'
             state: present
-        # - name: Add tmp volume to fstab
-        #   mount:
-        #     fstab: /mnt/etc/fstab
-        #     path: /tmp
-        #     src: /dev/mapper/tmp
-        #     fstype: tmpfs
-        #     opts: defaults
-        #     state: present
       tags:
         - fstab
-    # - name: Add tmp volume to crypttab
-    #   crypttab:
-    #     path: /mnt/etc/crypttab
-    #     backing_device: /dev/VolumeGroup00-tmp
-    #     name: tmp
-    #     password: /dev/urandom
-    #     opts: tmp,cipher=aes-xts-plain64,size=512
-    #     state: present
-    #   tags:
-    #     - crypttab
+
     - name: Set local timezone
       command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
       tags:
@@ -308,27 +211,30 @@
         - initramfs
         - mkinitcpio
 
-    - name: Setup grub boot
-      lineinfile:
-        path: /mnt/etc/default/grub
-        regexp: ^#GRUB_ENABLE_CRYPTODISK=
-        line: GRUB_ENABLE_CRYPTODISK=y
-      notify:
-        - Reinstall grub
-        - Update grub configuration
-      tags:
-        - install_bootloader
+    - name: Setup boot
+      import_tasks: tasks/boot.yml
 
-    - name: Setup grub boot
-      lineinfile:
-        path: /mnt/etc/default/grub
-        regexp: ^GRUB_CMDLINE_LINUX_DEFAULT=
-        line: GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet rd.luks.name={{ root_luks_uuid.stdout }}=cryptdev"
-      notify:
-        - Reinstall grub
-        - Update grub configuration
-      tags:
-        - install_bootloader
+    # - name: Setup grub boot
+    #   lineinfile:
+    #     path: /mnt/etc/default/grub
+    #     regexp: ^#GRUB_ENABLE_CRYPTODISK=
+    #     line: GRUB_ENABLE_CRYPTODISK=y
+    #   notify:
+    #     - Reinstall grub
+    #     - Update grub configuration
+    #   tags:
+    #     - install_bootloader
+
+    # - name: Setup grub boot
+    #   lineinfile:
+    #     path: /mnt/etc/default/grub
+    #     regexp: ^GRUB_CMDLINE_LINUX_DEFAULT=
+    #     line: GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet rd.luks.name={{ root_luks_uuid.stdout }}=cryptdev"
+    #   notify:
+    #     - Reinstall grub
+    #     - Update grub configuration
+    #   tags:
+    #     - install_bootloader
 
     - name: Setup user account
       block:
@@ -381,13 +287,15 @@
       tags:
         - initramfs
         - mkinitcpio
+    - name: Update grubs
+      import_tasks: tasks/grub.yml
 
-    - name: Reinstall grub
-      ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-install --target i386-pc --recheck "{{ install_drive }}"
-      tags:
-        - install_bootloader
+    # - name: Reinstall grub
+    #   ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-install --target i386-pc --recheck "{{ install_drive }}"
+    #   tags:
+    #     - install_bootloader
 
-    - name: Update grub configuration
-      ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg
-      tags:
-        - install_bootloader
+    # - name: Update grub configuration
+    #   ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg
+    #   tags:
+    #     - install_bootloader
