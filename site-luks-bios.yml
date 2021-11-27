@@ -7,6 +7,12 @@
     part_num: 1
 
   tasks:
+    - name: wut4
+      ansible.builtin.debug:
+        var: root_partition_suffix
+      tags:
+        - debug
+
     - name: Abort if the host is not booted from the Arch install media
       fail:
         msg: "This host is not booted from the Arch install media!"
@@ -327,7 +333,13 @@
     - name: Setup user account
       block:
         - name: Create user account
-          command: arch-chroot /mnt useradd --create-home --user-group --groups wheel {{ user_name }} --password {{ user_password }}
+          command: arch-chroot /mnt useradd --create-home --user-group --groups wheel {{ user_name }} 
+        - name: Set user's password
+          ansible.builtin.shell:
+            cmd: echo '{{ user_name }}:password' | arch-chroot /mnt chpasswd
+        - name: Expire user's password
+          ansible.builtin.command:
+            arch-chroot /mnt passwd -e {{ user_name }}
         - name: Create user's ssh directory
           file:
             path: /mnt/home/{{ user_name }}/.ssh

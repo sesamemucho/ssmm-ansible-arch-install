@@ -10,8 +10,8 @@ After booting from the Arch installation media, you will need to:
 1. Set the root password using the `passwd` command.
 2. Create a keyfile on your local host containing the password for
    your LUKS root volume via `echo -n "your_password" > keyfile`.
-3. Generate a hash for the password to be used on your personal
-   account using `mkpasswd --method=sha-512`.
+3. The user password will be 'password', and will have to be changed
+   on your first login.
 
 At this point we are able to login remotely as root, so we can
 populate `inventory.yml` and run `site.yml`:

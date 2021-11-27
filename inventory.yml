@@ -1,31 +1,20 @@
 ---
+vm:
+  hosts:
+    testing-bios:
+    testing-efi:
+
+baremetal:
+  hosts:
+    michiba:
+    sakai:
+    kaga:
+
+home:
+  children:
+    vm:
+    baremetal:
+
 all:
   children:
     home:
-      hosts:
-        local-foo:
-        michiba:
-        local-boo:
-        sakai:
-        kaga:
-        libvirt-bios:
-        libvirt-efi:
-
-# home:
-#   children:
-#     bios:
-#       hosts:
-#         local-boo:
-#         sakai:
-#         kaga:
-
-#     efi:
-#       hosts:
-#         local-foo:
-#         michiba:
-#         vagrant:
-
-# all:
-#   children:
-#     efi:
-#     bios:
