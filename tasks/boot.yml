@@ -10,7 +10,7 @@
         - Reinstall grub
         - Update grub configuration
 
-    - name: Setup grub boot
+    - name: Setup grub boot cmdline
       lineinfile:
         path: /mnt/etc/default/grub
         regexp: ^GRUB_CMDLINE_LINUX_DEFAULT=

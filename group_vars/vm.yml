@@ -1,5 +1,3 @@
 ---
 install_drive: /dev/vda
 wired_interface: enp1s0
-user_name: bob
-user_password: '$6$P/1MOlGb99w0owQ$Juj.CAME5Vu9GLBqVvUt2Y5gCJ0ix0V4QwnbyBCPctI6oRhgAhvzJmeSubDfQi9wvY/erI08WmYYX4XNEchgE1'

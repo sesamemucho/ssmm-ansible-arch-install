@@ -7,6 +7,19 @@
     pacstrap_extras:
       bios: 'gptfdisk syslinux'
       efi:  'efibootmgr'
+    partitions:
+      bios:
+        - { num: 1, start: "0%", end: "1MB", name: "bios" }
+        - { num: 2, start: "1MB", end: "513MB", name: "boot" }
+        - { num: 3, start: "513MB", end: "100%", name: "root" }
+      efi:
+        - { num: 1, start: "0%", end: "512MB", name: "boot" }
+        - { num: 2, start: "513MB", end: "100%", name: "root" }
+    partition_flags:
+      bios:
+        - { num: 1, flags: 'bios_grub' }
+      efi:
+        - { num: 1, flags: 'esp' }
 
   tasks:
     - name: Abort if the host is not booted from the Arch install media
@@ -15,12 +28,41 @@
       when: ansible_nodename != 'archiso'
       tags:
         - quick_exit
+
     - name: Synchronize clock via NTP
       command: timedatectl set-ntp true
       tags:
         - sync_clock
-    - name: Initialize drive
-      import_tasks: tasks/partition.yml
+
+    - name: Create Boot partitions
+      parted:
+        device: '{{ install_drive }}'
+        label: gpt
+        number: "{{ item.num }}"
+        part_start: "{{ item.start }}"
+        part_end: "{{ item.end }}"
+        name: "{{ item.name }}"
+        # Can't use flags: here because
+        #   The first partition is the only one that can validly have a flag
+        #   If the flag: keyword is present, parted will try to set that flag
+        #    even if the flag is blank, which will cause a syntax error in the parted
+        #    commmand.
+        state: present
+      loop: "{{ partitions[boottype] }}"
+      tags:
+        - repartition
+
+    - name: Create Boot partition flag
+      parted:
+        device: '{{ install_drive }}'
+        label: gpt
+        number: "{{ item.num }}"
+        flags: ["{{ item.flags }}"]
+        state: present
+      loop: "{{ partition_flags[boottype] }}"
+      tags:
+        - repartition
+
     - name: Setup LUKS encryption key
       block:
         - name: Copy keyfile
@@ -29,28 +71,33 @@
             dest: /root/keyfile
       tags:
         - luks1
+
     - name: Setup LUKS encryption for root filesystem
       block:
         - name: Destroy existing LUKS volume
           luks_device:
             device: '{{ install_drive }}{{ root_partition_suffix }}'
             state: absent
+
         - name: Create and open LUKS volume
           luks_device:
             device: '{{ install_drive }}{{ root_partition_suffix }}'
             keyfile: /root/keyfile
             name: root
             state: opened
+
         - name: Get UUID for root LUKS volume
           command: blkid -s UUID -o value '{{ install_drive }}{{ root_partition_suffix }}'
           register: root_luks_uuid
           changed_when: false
+
         - name: Print return information from the previous task
           ansible.builtin.debug:
             var: root_luks_uuid
             verbosity: 2
       tags:
         - luks2
+
     - name: Create filesystems
       block:
         - name: Create FAT32 filesystem in boot partition
@@ -59,33 +106,34 @@
             fstype: vfat
             opts: -F32
             force: yes
-        - name: Create ext4 filesystem in root volume
+
+        - name: Create requested filesystem in root volume
           filesystem:
             dev: /dev/mapper/root
-            fstype: ext4
+            fstype: "{{ root_filesystem }}"
             force: yes
-        # - name: Get UUID for boot filesystem
-        #   command: blkid -s UUID -o value '{{ install_drive }}{{ boot_partition_suffix }}'
-        #   register: boot_uuid
-        #   changed_when: false
+
         - name: Get UUID for root filesystem
           command: blkid -s UUID -o value /dev/mapper/root
           register: root_uuid
           changed_when: false
       tags:
         - create_filesystems
+
     - name: Mount filesystems
       block:
         - name: Mount root filesystem
           mount:
             path: /mnt
             src: /dev/mapper/root
-            fstype: ext4
+            fstype: "{{ root_filesystem }}"
             state: mounted
+
         - name: Create mountpoint for boot volume
           file:
             path: /mnt/boot
             state: directory
+
         - name: Mount boot filesystem
           mount:
             path: /mnt/boot
@@ -102,6 +150,7 @@
             name:
               - reflector
             update_cache: yes
+
         - name: filter the fastest mirrors that support HTTPS
           shell: reflector --verbose --latest 10 --sort rate | awk -e '! /rsync/ {print}' > /etc/pacman.d/mirrorlist
       tags:
@@ -116,15 +165,17 @@
       block:
         - name: Generate blank fstab
           command: genfstab -U /mnt >> /mnt/etc/fstab
+
         - name: Add root volume to fstab
           mount:
             fstab: /mnt/etc/fstab
             path: /
             src: /dev/mapper/root
-            fstype: ext4
+            fstype: "{{ root_filesystem }}"
             opts: defaults
             passno: '0'
             state: present
+
         - name: Add boot volume to fstab
           mount:
             fstab: /mnt/etc/fstab
@@ -141,10 +192,12 @@
       command: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
       tags:
         - timezone
+
     - name: Generate adjtime file
       command: arch-chroot /mnt hwclock --systohc
       tags:
         - adjtime
+
     - name: Setup locales
       block:
         - name: Configure locale.gen
@@ -155,20 +208,24 @@
           loop:
             - {regex: en_US\.UTF-8 UTF-8, line: en_US.UTF-8 UTF-8}
             - {regex: en_US ISO-8859-1, line: en_US ISO-8859-1}
+
         - name: Create locale.conf
           copy:
             content: "LANG=en_US.UTF-8"
             dest: /mnt/etc/locale.conf
+
         - name: Generate locales
           command: arch-chroot /mnt locale-gen
       tags:
         - locales
+
     - name: Set hostname
       copy:
         content: '{{ inventory_hostname }}'
         dest: /mnt/etc/hostname
       tags:
         - hostname
+
     - name: Setup netctl
       block:
         - name: Create netctl profile for wired connection
@@ -182,14 +239,17 @@
               # IPv6 traffic is tunneled over IPv4, which eats 20 bytes of the MTU.
               ExecUpPost='/usr/bin/ip link set {{ wired_interface }} mtu 1480'
             dest: /mnt/etc/netctl/wired
+
         - name: Enable wired netctl profile
           command: arch-chroot /mnt netctl enable wired
       tags:
         - netctl
+
     - name: Enable sshd
       command: arch-chroot /mnt systemctl enable sshd
       tags:
         - sshd
+
     - name: Set up initramfs
       block:
         - name: Add vconsole.conf
@@ -213,28 +273,6 @@
 
     - name: Setup boot
       import_tasks: tasks/boot.yml
-
-    # - name: Setup grub boot
-    #   lineinfile:
-    #     path: /mnt/etc/default/grub
-    #     regexp: ^#GRUB_ENABLE_CRYPTODISK=
-    #     line: GRUB_ENABLE_CRYPTODISK=y
-    #   notify:
-    #     - Reinstall grub
-    #     - Update grub configuration
-    #   tags:
-    #     - install_bootloader
-
-    # - name: Setup grub boot
-    #   lineinfile:
-    #     path: /mnt/etc/default/grub
-    #     regexp: ^GRUB_CMDLINE_LINUX_DEFAULT=
-    #     line: GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet rd.luks.name={{ root_luks_uuid.stdout }}=cryptdev"
-    #   notify:
-    #     - Reinstall grub
-    #     - Update grub configuration
-    #   tags:
-    #     - install_bootloader
 
     - name: Setup user account
       block:
@@ -273,13 +311,6 @@
         validate: /usr/sbin/visudo --check --file=%s
       tags:
         - sudo
-    # - name: Reboot
-    #   reboot:
-    #     connect_timeout: 1
-    #     reboot_timeout: 1
-    #   failed_when: false
-    #   tags:
-    #     - reboot
 
   handlers:
     - name: Update mkinitcpio
@@ -287,15 +318,6 @@
       tags:
         - initramfs
         - mkinitcpio
+
     - name: Update grubs
       import_tasks: tasks/grub.yml
-
-    # - name: Reinstall grub
-    #   ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-install --target i386-pc --recheck "{{ install_drive }}"
-    #   tags:
-    #     - install_bootloader
-
-    # - name: Update grub configuration
-    #   ansible.builtin.command: arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg
-    #   tags:
-    #     - install_bootloader
