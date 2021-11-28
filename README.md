@@ -29,19 +29,64 @@ I think it would be easiest to start with a quick run-through.
    You will need an internet connection for installing Arch Linux
    packages on the VM.
    
+   You will need a recent Archlinux ISO. As of this writing, the name
+   is archlinux-2021.11.01-x86_64.iso
+   
 1. Go to the right place.
    Checkout this repository.
    `cd /path/to/ssmm-ansible-arch-install`
 
 2. Set up the configuration.
-   The file 'group_vars/home/yml' should look something like the following:
+   In the repository, the file 'group_vars/home.yml' is encrypted with
+   ansible-vault. You can make another encrypted home.yml, or you can
+   leave it unencrypted. In any case, it should look something like
+   the following:
    
    ---
    ansible_user: root
    ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
    user_name: dogtoy
+   
+   By default, the luks keyfile is named './home_keyfile'. Make this
+   file with your favorite passphrase inside:
+   `echo 'my passphrase' > ./home_keyfile`
 
+3. Start the VM.
+   In one console/widow,
+   `testing/scripts/start-efi-vm.sh /path/to/arch/iso`
+   
+4. Set up the VM
+   The start-efi-vm.sh will open a console to the VM. Login as
+   'root'. Run `passwd` to set the root password to (say) 'rootpass'.
 
+5. Start the ansible process.
+   In another console/window,
+   `./do-test-efi.sh`
+   It will ask for an SSH password. Give it the same password you set
+   in step 4.
+
+   This should finish without errors in several minutes.
+   
+6. Shut down VM.
+   Type `poweroff` in the vm console from step 4. This will shut down
+   the VM and cause the 'testing/scripts/start-efi-vm.sh' script to
+   exit.
+   
+7. Restart VM.
+   In `virt-manager`, start the 'testing-efi' VM and open a console.
+   Give it the LUKS passphrase from step 3, and then login as the user
+   (step 3) with the password 'password'. You will be required to
+   immediately change this to something else.
+   
+8. Yay!
+   If you've reached this step, you have succeeded! You now have a
+   bare-bones Arch Linux install which you can customize (say, with
+   [ssmm-ansible-home](https://github.com/sesamemucho/ssmm-ansible-home)).
+   Well, not the VM (it's very small), but you can do the same for a
+   laptop or other machine, or a larger VM.
+   
+9. The example was for an EFI VM. You can do the same for BIOS; just
+   substitute 'bios' for 'efi' above.
 
 ## Usage ##
 
