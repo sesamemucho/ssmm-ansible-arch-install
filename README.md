@@ -11,6 +11,38 @@ disable this, but the non-LUKS setup isn't currently working.
 For testing and development, there are scripts to start KVM virtual
 machines for BIOS and UEFI work.
 
+## Example Runthrough with EFI VM ##
+
+I think it would be easiest to start with a quick run-through.
+
+0. Prerequisites.
+   You should be able to run KVM virtual machines with libvirt.
+   Packages/programs:
+       virsh
+       virt-manager
+   You will need to be able to use the qemu:///system connection. What
+   this means is that your user needs to be in the 'libvirt' group. To
+   do this, if you're not already there, run
+   `sudo usermod -a -G libvirt your-user-name`, then logout and log
+   back in.
+   
+   You will need an internet connection for installing Arch Linux
+   packages on the VM.
+   
+1. Go to the right place.
+   Checkout this repository.
+   `cd /path/to/ssmm-ansible-arch-install`
+
+2. Set up the configuration.
+   The file 'group_vars/home/yml' should look something like the following:
+   
+   ---
+   ansible_user: root
+   ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
+   user_name: dogtoy
+
+
+
 ## Usage ##
 
 For details on configuration, see the [Configuration](#configuration) section below.
@@ -53,4 +85,10 @@ inventory.yml file and set up the 'home_keyfile'.
 
 mkinitcpio:
 https://wiki.archlinux.org/title/Dm-crypt/System_configuration#mkinitcpio
+
+## Notes ##
+
+Useful links:
+
+[Linux: Full Disk Encryption with BIOS, UEFI using MBR, GPT, LUKS, LVM and GRUB](https://www.rohlix.eu/post/linux-disk-encryption-with-bios-uefi-using-mbr-gpt-luks-lvm-and-grub/)
 
