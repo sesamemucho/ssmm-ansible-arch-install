@@ -1,5 +1,4 @@
 #
 # Run ansible-arch-install on test BIOS VM.
 #
-set -x
-ansible-playbook "$@" -i inventory.yml --ask-pass -l testing-bios site-luks-bios.yml
+ansible-playbook "$@" -i inventory.yml --ask-pass -l testing-bios site.yml

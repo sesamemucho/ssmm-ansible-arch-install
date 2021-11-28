@@ -1,3 +1,4 @@
-home_keyfile
+*_keyfile
 /host_vars/testing-bios.yml
 /host_vars/testing-efi.yml
+ssmm_archive/

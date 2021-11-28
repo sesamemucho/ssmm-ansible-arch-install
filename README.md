@@ -51,9 +51,6 @@ Basically, set up a `host_vars/hostname.yml` file with the IP address
 and any other needed customizations; make sure the hostname is in the
 inventory.yml file and set up the 'home_keyfile'.
 
-site-luks.yml builds an EFI system with LUKS, but no LVM.
-site-luks-bios.yml builds an BIOS system with LUKS, but no LVM.
-
 mkinitcpio:
 https://wiki.archlinux.org/title/Dm-crypt/System_configuration#mkinitcpio
 
