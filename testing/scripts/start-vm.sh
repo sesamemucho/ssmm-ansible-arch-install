@@ -1,11 +1,16 @@
 # Creates and starts testing-xxx VM
 #
 #
+here=$(dirname $0)
+. $here/parse-args.sh
+
 vm_name=${1:?Need name of ansible-arch-testing VM}
 vm_iso=${2:?Need location of iso file for arch installation}
 
-here=$(dirname $0)
-connect="--connect qemu:///system"
+echo vm_name is:     $vm_name
+echo vm_iso is:      $vm_iso
+echo vm_memsize is:  $vm_memsize
+echo vm_disksize is: $vm_disksize
 
 # If the vm name has "bios" in it, then we're doing BIOS
 # Otherwise we're doing EFI
@@ -18,11 +23,11 @@ fi
 
 virt-install $connect                         \
              --name "$vm_name"                \
-             --memory 1024                    \
+             --memory $vm_memsize             \
              --vcpus=2,maxvcpus=4             \
              --cpu host                       \
              --cdrom "$vm_iso"                \
-             --disk size=4,format=qcow2       \
+             --disk size=${vm_disksize},format=qcow2 \
              --virt-type kvm                  \
              --console pty,target.type=virtio \
              $boottype                        \

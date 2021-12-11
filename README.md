@@ -42,11 +42,13 @@ I think it would be easiest to start with a quick run-through.
    leave it unencrypted. In any case, it should look something like
    the following:
    
+   ```yaml
    ---
    ansible_user: root
    ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
    user_name: dogtoy
-   
+   ```
+
    By default, the luks keyfile is named './home_keyfile'. Make this
    file with your favorite passphrase inside:
    `echo 'my passphrase' > ./home_keyfile`
