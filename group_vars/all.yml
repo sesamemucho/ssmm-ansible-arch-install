@@ -1,5 +1,6 @@
 ---
 install_drive: /dev/sda
+use_wireless: no
 wired_interface: enp3s0
 boot_partition_suffix: '1'
 root_partition_suffix: '2'

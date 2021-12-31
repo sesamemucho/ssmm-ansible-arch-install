@@ -1,2 +1,2 @@
 #!/bin/bash
-ansible-playbook -i inventory.yml -i kaga, --ask-pass "$@" site.yml
+ansible-playbook -i inventory.yml --ask-pass "$@" site.yml

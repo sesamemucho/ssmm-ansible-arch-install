@@ -245,6 +245,27 @@
       tags:
         - netctl
 
+    - name: Setup netctl wireless
+      block:
+        - name: Create netctl profile for wireless connection
+          copy:
+            content: |
+              Description='Wireless with DHCP'
+              Interface={{ wireless_interface }}
+              Connection=wireless
+              IP=dhcp
+              Security=wpa
+              ESSID='{{ wireless_ssid }}'
+              Key='{{ wireless_key }}'
+            dest: /mnt/etc/netctl/wireless
+
+        - name: Enable wireless netctl profile
+          command: arch-chroot /mnt netctl enable wireless
+
+      when: use_wireless
+      tags:
+        - netctl
+
     - name: Enable sshd
       command: arch-chroot /mnt systemctl enable sshd
       tags:
