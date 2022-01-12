@@ -1,0 +1,102 @@
+---
+- hosts: all
+  become: yes
+
+  vars:
+    ansible_become_pass: rootpass
+
+  tasks:
+    - name: Make sure SDcard dev is defined
+      ansible.builtin.fail: msg="sdcard device must be defined (say '--extra-vars \"sd_dev=/dev/sdb\"'_"
+      when: sd_dev is undefined
+
+    - name: Read device information (always use unit when probing)
+      community.general.parted: "device={{ sd_dev }} unit=MiB"
+      register: sdcard_info
+
+    - name: Check sdb info
+      ansible.builtin.debug:
+        var: sdcard_info
+
+    - name: Remove all partitions from disk
+      community.general.parted:
+        device: "{{ sd_dev }}"
+        number: '{{ item.num }}'
+        state: absent
+      loop: '{{ sdcard_info.partitions }}'
+
+    - name: Create boot partition
+      community.general.parted:
+        device: "{{ sd_dev }}"
+        number: 1
+        state: present
+        fs_type: fat32
+        part_end: 200MiB
+
+    - name: Create root partition
+      community.general.parted:
+        device: "{{ sd_dev }}"
+        number: 2
+        state: present
+        fs_type: ext4
+        part_start: 200MiB
+        part_end: 100%
+
+    - name: Create boot filesystem
+      community.general.filesystem:
+        fstype: vfat
+        dev: "{{ sd_dev }}1"
+
+    - name: Create root filesystem
+      community.general.filesystem:
+        fstype: ext4
+        dev: "{{ sd_dev }}2"
+
+    - name: Mount boot partition
+      ansible.posix.mount:
+        src: "{{ sd_dev }}1"
+        path: /tmp/rpi/boot
+        fstype: vfat
+        state: mounted
+
+    - name: Mount root partition
+      ansible.posix.mount:
+        src: "{{ sd_dev }}2"
+        path: /tmp/rpi/root
+        fstype: ext4
+        state: mounted
+
+    - name: Extract armv7 Arch image
+      ansible.builtin.unarchive:
+        src: ArchLinuxARM-rpi-armv7-latest.tar.gz
+        dest: /tmp/rpi/root
+
+    - name: Copy boot files to the first partition
+      ansible.builtin.copy:
+        src: /tmp/rpi/root/boot/
+        dest: /tmp/rpi/boot/
+        remote_src: yes
+
+    # - name: Remove boot files from second partition
+    #   ansible.builtin.file:
+    #     path: /tmp/rpi/root/boot/
+    #     state: absent
+
+    - name: unmount boot partition
+      ansible.posix.mount:
+        src: "{{ sd_dev }}1"
+        path: /tmp/rpi/boot
+        fstype: vfat
+        state: absent
+      tags:
+        - unmount
+
+    - name: unmount root partition
+      ansible.posix.mount:
+        src: "{{ sd_dev }}2"
+        path: /tmp/rpi/root
+        fstype: ext4
+        state: absent
+      tags:
+        - unmount
+

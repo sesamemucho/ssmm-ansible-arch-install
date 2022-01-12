@@ -4,16 +4,22 @@ vm:
     testing-bios:
     testing-efi:
 
+mini:
+  hosts:
+    rpi:
+
 baremetal:
   hosts:
     michiba:
     sakai:
     kaga:
+    metatron:
 
 home:
   children:
     vm:
     baremetal:
+    mini:
 
 all:
   children:

@@ -7,19 +7,6 @@
     pacstrap_extras:
       bios: 'gptfdisk syslinux'
       efi:  'efibootmgr'
-    partitions:
-      bios:
-        - { num: 1, start: "0%", end: "1MB", name: "bios" }
-        - { num: 2, start: "1MB", end: "513MB", name: "boot" }
-        - { num: 3, start: "513MB", end: "100%", name: "root" }
-      efi:
-        - { num: 1, start: "0%", end: "512MB", name: "boot" }
-        - { num: 2, start: "513MB", end: "100%", name: "root" }
-    partition_flags:
-      bios:
-        - { num: 1, flags: 'bios_grub' }
-      efi:
-        - { num: 1, flags: 'esp' }
 
   tasks:
     - name: Abort if the host is not booted from the Arch install media
@@ -33,6 +20,11 @@
       command: timedatectl set-ntp true
       tags:
         - sync_clock
+
+    - name: Wipe install drive and all its partitions
+      command: find /dev -wholename "{{ install_drive }}*" -exec wipefs --force --all {} \;
+      tags:
+        - wipefs
 
     - name: Create Boot partitions
       parted:
@@ -76,18 +68,18 @@
       block:
         - name: Destroy existing LUKS volume
           luks_device:
-            device: '{{ install_drive }}{{ root_partition_suffix }}'
+            device: '{{ install_drive }}{{ partition_number[boottype]["root_suffix"] }}'
             state: absent
 
         - name: Create and open LUKS volume
           luks_device:
-            device: '{{ install_drive }}{{ root_partition_suffix }}'
+            device: '{{ install_drive }}{{ partition_number[boottype]["root_suffix"] }}'
             keyfile: /root/keyfile
             name: root
             state: opened
 
         - name: Get UUID for root LUKS volume
-          command: blkid -s UUID -o value '{{ install_drive }}{{ root_partition_suffix }}'
+          command: blkid -s UUID -o value '{{ install_drive }}{{ partition_number[boottype]["root_suffix"] }}'
           register: root_luks_uuid
           changed_when: false
 
@@ -102,7 +94,7 @@
       block:
         - name: Create FAT32 filesystem in boot partition
           filesystem:
-            dev: '{{ install_drive }}{{ boot_partition_suffix }}'
+            dev: '{{ install_drive }}{{ partition_number[boottype]["boot_suffix"] }}'
             fstype: vfat
             opts: -F32
             force: yes
@@ -137,7 +129,7 @@
         - name: Mount boot filesystem
           mount:
             path: /mnt/boot
-            src: '{{ install_drive }}{{ boot_partition_suffix }}'
+            src: '{{ install_drive }}{{ partition_number[boottype]["boot_suffix"] }}'
             fstype: vfat
             state: mounted
       tags:
@@ -180,7 +172,7 @@
           mount:
             fstab: /mnt/etc/fstab
             path: /boot
-            src: '{{ install_drive }}{{ boot_partition_suffix }}'
+            src: '{{ install_drive }}{{ partition_number[boottype]["boot_suffix"] }}'
             fstype: vfat
             opts: defaults
             passno: '2'
