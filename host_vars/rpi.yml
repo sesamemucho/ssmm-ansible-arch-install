@@ -1,6 +1,0 @@
----
-# Get rid of interpreter discovery warning
-ansible_python_interpreter: /usr/bin/python
-# This playbook should always be run on the local host
-ansible_connection: local
-ansible_host: localhost

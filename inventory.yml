@@ -4,9 +4,9 @@ vm:
     testing-bios:
     testing-efi:
 
-mini:
+rpi:
   hosts:
-    rpi:
+    uriel:
 
 baremetal:
   hosts:

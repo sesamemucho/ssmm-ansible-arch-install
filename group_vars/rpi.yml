@@ -1,0 +1,8 @@
+---
+# Get rid of interpreter discovery warning
+ansible_python_interpreter: /usr/bin/python
+ansible_host: 10.135.155.154
+ansible_become_method: su
+ansible_connection: ssh
+ansible_ssh_user: alarm
+ansible_ssh_pass: alarm
